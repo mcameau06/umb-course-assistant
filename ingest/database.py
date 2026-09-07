@@ -1,6 +1,6 @@
 import sqlite3
 
-from utils import parse_course_title, extract_prereq_course_codes
+from ingest.utils import parse_course_title, extract_prereq_course_codes
 
 SCHEMA_SQL = """
     CREATE TABLE IF NOT EXISTS majors (

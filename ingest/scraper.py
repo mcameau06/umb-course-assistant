@@ -5,11 +5,14 @@ from urllib3.util.retry import Retry
 import time
 import argparse
 import logging
-from utils import extract_course_info
-from database import init_db, save_records_to_sqlite
+import os
+from ingest.utils import extract_course_info
+from ingest.database import init_db, save_records_to_sqlite
 
 UNDERGRADUATE_URL = "https://courses.umb.edu/course_catalog/listing/ugrd"
 GRADUATE_URL = "https://courses.umb.edu/course_catalog/listing/grd"
+
+INGEST_DIR = os.path.dirname(os.path.abspath(__file__))
 
 HEADERS = {'User-Agent': 'UMB-CoursePlanner (student course-planning project)'}
 
@@ -286,10 +289,10 @@ def main():
                          help="Which catalog to scrape (default: ugrd)")
     parser.add_argument("--max-majors", type=int, default=None,
                          help="Limit the number of majors scraped per catalog (default: all)")
-    parser.add_argument("--db-path", default="courses.db",
-                         help="Path to the SQLite database file (default: courses.db)")
-    parser.add_argument("--progress-file", default="scraped_majors.txt",
-                         help="Text file tracking completed major URLs, for resuming (default: scraped_majors.txt)")
+    parser.add_argument("--db-path", default=os.path.join(INGEST_DIR, "courses.db"),
+                         help="Path to the SQLite database file (default: ingest/courses.db)")
+    parser.add_argument("--progress-file", default=os.path.join(INGEST_DIR, "scraped_majors.txt"),
+                         help="Text file tracking completed major URLs, for resuming (default: ingest/scraped_majors.txt)")
     parser.add_argument("--sleep-offering", type=float, default=3.0,
                          help="Seconds to sleep between major-page requests (default: 3)")
     parser.add_argument("--sleep-course", type=float, default=2.0,
