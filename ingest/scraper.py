@@ -252,6 +252,34 @@ def scrape_course_sections(major_name, courses, session, sleep_secs=2, course_pa
     return records
 
 
+def load_completed_majors(progress_path):
+    """Read the set of major URLs already scraped from a progress file.
+
+    Args:
+        progress_path: Path to a text file with one completed major URL
+            per line. Need not exist yet.
+
+    Returns:
+        A set of major URLs that have already been scraped.
+    """
+    try:
+        with open(progress_path) as f:
+            return {line.strip() for line in f if line.strip()}
+    except FileNotFoundError:
+        return set()
+
+
+def mark_major_completed(progress_path, major_url):
+    """Append a major URL to the progress file, marking it as done.
+
+    Args:
+        progress_path: Path to the progress file.
+        major_url: URL of the major that finished scraping successfully.
+    """
+    with open(progress_path, "a") as f:
+        f.write(f"{major_url}\n")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Scrape the UMB course catalog into SQLite.")
     parser.add_argument("--level", choices=["ugrd", "grd", "both"], default="ugrd",
@@ -260,6 +288,8 @@ def main():
                          help="Limit the number of majors scraped per catalog (default: all)")
     parser.add_argument("--db-path", default="courses.db",
                          help="Path to the SQLite database file (default: courses.db)")
+    parser.add_argument("--progress-file", default="scraped_majors.txt",
+                         help="Text file tracking completed major URLs, for resuming (default: scraped_majors.txt)")
     parser.add_argument("--sleep-offering", type=float, default=3.0,
                          help="Seconds to sleep between major-page requests (default: 3)")
     parser.add_argument("--sleep-course", type=float, default=2.0,
@@ -282,10 +312,12 @@ def main():
     session = build_session()
     conn = init_db(args.db_path)
     course_page_cache = {}
+    completed_majors = load_completed_majors(args.progress_file)
 
     try:
         for url in urls:
             majors = scrape_all_majors(url, session)
+            majors = [m for m in majors if m["url"] not in completed_majors]
 
             for count, major in enumerate(majors):
                 if args.max_majors is not None and count >= args.max_majors:
@@ -298,6 +330,7 @@ def main():
                 )
 
                 save_records_to_sqlite(records, conn=conn)
+                mark_major_completed(args.progress_file, major["url"])
                 logger.info(f"Saved {len(records)} records for {major['name']}")
     finally:
         conn.close()
