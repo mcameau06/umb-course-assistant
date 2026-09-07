@@ -284,7 +284,7 @@ def mark_major_completed(progress_path, major_url):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Scrape the UMB course catalog into SQLite.")
+    parser = argparse.ArgumentParser(description="Web Scraper")
     parser.add_argument("--level", choices=["ugrd", "grd", "both"], default="ugrd",
                          help="Which catalog to scrape (default: ugrd)")
     parser.add_argument("--max-majors", type=int, default=None,

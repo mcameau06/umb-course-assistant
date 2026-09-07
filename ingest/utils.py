@@ -103,7 +103,8 @@ def extract_course_info(course_page):
     }
 
 
-COURSE_TITLE_RE = re.compile(r'^([A-Z]+)\s+(\d+[A-Z]?)\s+(.+)$')
+
+COURSE_TITLE_RE = re.compile(r'^([A-Z0-9\-]+(?:\s+[A-Z0-9\-]+)*)\s+(\d+[A-Z]?)\s+(.+)$')
 PREREQ_COURSE_CODE_RE = re.compile(r'\b[A-Z]{2,6}\s+\d{3}[A-Z]?\b')
 CREDIT_RANGE_RE = re.compile(r'^(\d+(?:\.\d+)?)\s*/\s*(\d+(?:\.\d+)?)$')
 CREDIT_SINGLE_RE = re.compile(r'^(\d+(?:\.\d+)?)$')

@@ -161,7 +161,7 @@ def save_records_to_sqlite(records, conn=None, db_path="courses.db"):
                     prereq_text = sec.get("Pre Requisites")
                     if prereq_text and prereq_text not in seen_prereq_texts:
                         seen_prereq_texts.add(prereq_text)
-                        for prereq_code in extract_prereq_course_codes(prereq_text):
+                        for prereq_code in set(extract_prereq_course_codes(prereq_text)):
                             cur.execute(
                                 """INSERT OR IGNORE INTO prerequisites
                                    (course_id, prereq_course_code, requirement_type, raw_text)
