@@ -1,2 +1,3 @@
 myenv/
 ingest/courses.db
+ingest/scraped_majors.txt
