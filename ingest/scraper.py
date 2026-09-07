@@ -1,32 +1,87 @@
 from bs4 import BeautifulSoup
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 import time
 import argparse
-from utils import extract_course_info, print_course_record
-from database import save_records_to_sqlite
+import logging
+from utils import extract_course_info
+from database import init_db, save_records_to_sqlite
 
-UNDERGRADUATE_URL = "https://courses.umb.edu/course_catalog/listing/ugrd" 
-GRADUATE_URL = "https://courses.umb.edu/course_catalog/listing/grd"  
+UNDERGRADUATE_URL = "https://courses.umb.edu/course_catalog/listing/ugrd"
+GRADUATE_URL = "https://courses.umb.edu/course_catalog/listing/grd"
 
 HEADERS = {'User-Agent': 'UMB-CoursePlanner (student course-planning project)'}
 
-def request_page(url, headers=HEADERS):
+logger = logging.getLogger(__name__)
+
+
+def build_session(headers=HEADERS, retries=3, backoff_factor=1.0):
+    """Build a requests.Session that automatically retries server errors
+    and connection failures with exponential backoff.
+
+    Args:
+        headers: Request headers to attach to every call made with this session.
+        retries: Max number of retry attempts for a failed request.
+        backoff_factor: Multiplier controlling the delay between retries.
+
+    Returns:
+        A requests.Session configured with a retrying HTTPAdapter.
+    """
+    session = requests.Session()
+    session.headers.update(headers)
+
+    retry = Retry(
+        total=retries,
+        connect=retries,
+        read=retries,
+        status=retries,
+        backoff_factor=backoff_factor,
+        status_forcelist=(500, 502, 503, 504),
+        allowed_methods=("GET",),
+    )
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount("https://", adapter)
+    session.mount("http://", adapter)
+    return session
+
+
+def request_page(url, session):
+    """Fetch a URL and parse it into a BeautifulSoup document.
+
+    Args:
+        url: The page URL to fetch.
+        session: The requests.Session to make the request with.
+
+    Returns:
+        A BeautifulSoup document, or None if the request failed.
+    """
     try:
-        response = requests.get(url, headers=headers)
-        response.raise_for_status()  # Raise an error for bad responses
+        response = session.get(url)
+        response.raise_for_status()  
         return BeautifulSoup(response.content, 'lxml')
     except requests.RequestException as e:
-        print(f"Error occurred while fetching the main page: {e}")
+        logger.error(f"Error occurred while fetching {url}: {e}")
         return None
 
-def get_course_data(link, sleep_secs=2):
-    """Fetch a course page and extract its description + section info.
-    Returns None if there's no link to fetch."""
+
+def get_course_data(link, session, sleep_secs=2):
+    """Fetch a course page and extract its description and section info.
+
+    Args:
+        link: URL of the course page, or None if no page is available.
+        session: The requests.Session to make the request with.
+        sleep_secs: Seconds to sleep before the request, to rate-limit the site.
+
+    Returns:
+        A dict with "description" and "sections" keys, or None if `link`
+        is None or the page could not be fetched.
+    """
     if link is None:
         return None
 
     time.sleep(sleep_secs)
-    course_page = request_page(link)
+    course_page = request_page(link, session)
 
     if not course_page:
         return None
@@ -34,11 +89,18 @@ def get_course_data(link, sleep_secs=2):
     return extract_course_info(course_page)
 
 
-def scrape_all_majors(school_url, headers=HEADERS):
+def scrape_all_majors(school_url, session):
+    """Extract all majors listed on a school's catalog page.
+
+    Args:
+        school_url: URL of the school's catalog listing page.
+        session: The requests.Session to make the request with.
+
+    Returns:
+        A list of {"name": str, "url": str} dicts, one per major. Empty
+        if the page couldn't be fetched or has no majors list.
     """
-    Extracts all majors from the given school page and returns a dictionary
-    """
-    school_page = request_page(school_url, headers=headers)
+    school_page = request_page(school_url, session)
 
     if school_page is None:
         return []
@@ -63,116 +125,132 @@ def scrape_all_majors(school_url, headers=HEADERS):
     return majors
 
 
-def scrape_course_offerings(majors, headers=HEADERS, max_majors=None, sleep_secs=3):
+def scrape_major_courses(major, session, sleep_secs=3):
+    """Fetch a single major's page and collect its courses and offerings.
+
+    Args:
+        major: A {"name": str, "url": str} dict identifying the major.
+        session: The requests.Session to make the request with.
+        sleep_secs: Seconds to sleep before the request, to rate-limit the site.
+
+    Returns:
+        A dict mapping course name to a dict of {season: link}, e.g.
+        {"AF 210 Financial Accounting": {"Fall 2026": link, ...}}. Empty
+        if the major's page couldn't be fetched.
     """
-    Extracts course offerings for each major and returns a nested dictionary
-    """
-    count = 0
-    course_offerings = {}
+    major_name = major["name"]
+    major_url = major["url"]
 
-    for major in majors:
-        major_name = major["name"]
-        major_url = major["url"]
+    time.sleep(sleep_secs)
 
-        if max_majors is not None and count >= max_majors:
-            break
+    logger.info(f"Major: {major_name}, URL: {major_url}")
+    major_page = request_page(major_url, session)
 
-        time.sleep(sleep_secs)
+    if not major_page:
+        logger.warning(f"Skipping {major_name} due to failed page request.")
+        return {}
 
-        print(f"Major: {major_name}, URL: {major_url}")
-        major_page = request_page(major_url, headers=headers)
+    courses_list = major_page.find_all(
+        "ul",
+        class_="showHideList"
+    )[0].find_all("li", recursive=False)
 
-        if not major_page:
-            print(f"Skipping {major_name} due to failed page request.")
+    courses_dict = {}
+    for course in courses_list:
+        course_name = (
+            course.find("h4")
+            .get_text()
+            .split("+")[0]
+            .replace("\xa0\xa0", " ")
+            .strip()
+        )
+
+        logger.debug(f"Course Name: {course_name}")
+        offering_list = course.find(
+            "ul",
+            class_="course-info-listing-padding-bottom"
+        )
+
+        if offering_list is None:
+            courses_dict[course_name] = {"TBA": None}
             continue
 
-        courses_list = major_page.find_all(
-            "ul",
-            class_="showHideList"
-        )[0].find_all("li", recursive=False)
+        offering_links = offering_list.find_all("a")
+        offering_dict = {}
 
-        courses_dict = {}
-        for course in courses_list:
-            course_name = (
-                course.find("h4")
-                .get_text()
-                .split("+")[0]
-                .replace("\xa0\xa0", " ")
-                .strip()
-            )
+        if not offering_links:
+            logger.debug(f"No offerings found for {course_name}.")
+            courses_dict[course_name] = {"TBA": None}
+            continue
 
-            print(f"Course Name: {course_name}")
-            offering_list = course.find(
-                "ul", 
-                class_="course-info-listing-padding-bottom"
-                )
+        else:
+            for offering_link in offering_links:
+                link = offering_link["href"]
+                season = offering_link.get_text()
+                offering_dict[season] = link
 
-            if offering_list is None:
-                courses_dict[course_name] = {"TBA": None}
-                continue
-            
-            offering_links = offering_list.find_all("a")
-            offering_dict = {}
+            courses_dict[course_name] = offering_dict
 
-            if not offering_links:
-                print(f"No offerings found for {course_name}.")
-                courses_dict[course_name] = {"TBA": None}
-                continue
-        
-            else:
-                for offering_link in offering_links:
-                    link = offering_link["href"]
-                    season = offering_link.get_text()
-                    offering_dict[season] = link
+    return courses_dict
 
-                courses_dict[course_name] = offering_dict
 
-        course_offerings[major_name] = courses_dict
-        count += 1
+def scrape_course_sections(major_name, courses, session, sleep_secs=2, course_page_cache=None):
+    """Walk one major's courses -> offerings structure, fetching course data.
 
-    return course_offerings
+    Args:
+        major_name: Name of the major these courses belong to.
+        courses: Dict of {course_name: {season: link}}, as returned by scrape_major_courses.
+        session: The requests.Session to make requests with.
+        sleep_secs: Seconds to sleep before each course-page request.
+        course_page_cache: Dict mapping a course link to its already-extracted
+            course_info. If a course has multiple offerings pointing at the
+            identical link (e.g. cross-listed seasons), it's only downloaded
+            and parsed once. Mutated in place; pass the same dict across
+            calls to share the cache across majors.
 
-def scrape_course_sections(course_offerings, max_majors=None, sleep_secs=2):
-    """Walk the nested majors -> courses -> offerings structure,
-    fetching and printing course data. Returns a flat list of records."""
-    all_records = []
-    major_count = 0
+    Returns:
+        A flat list of record dicts (major, course, season, link, course_info)
+        for this major.
+    """
+    if course_page_cache is None:
+        course_page_cache = {}
 
-    for major_name, courses in course_offerings.items():
-        if max_majors is not None and major_count >= max_majors:
-            break
+    records = []
 
-        print(f"Major: {major_name}")
-        for course_name, offerings in courses.items():
-            print(f"  Course: {course_name}")
-            for season, link in offerings.items():
+    logger.info(f"Major: {major_name}")
+    for course_name, offerings in courses.items():
+        logger.debug(f"  Course: {course_name}")
+        for season, link in offerings.items():
 
-                if link is None:
-                    print(f"    Offering: {season}, No link available.")
-                    all_records.append({
-                        "major": major_name,
-                        "course": course_name,
-                        "season": season,
-                        "link": None,
-                        "course_info": None,
-                    })
-                    continue
-                
-                course_info = get_course_data(link, sleep_secs=sleep_secs)
-                print_course_record(major_name, course_name, season, link, course_info)
-
-                all_records.append({
+            if link is None:
+                logger.debug(f"    Offering: {season}, No link available.")
+                records.append({
                     "major": major_name,
                     "course": course_name,
                     "season": season,
-                    "link": link,
-                    "course_info": course_info,
+                    "link": None,
+                    "course_info": None,
                 })
+                continue
 
-        major_count += 1
-        print(f"  Majors processed: {major_count}")
+            if link in course_page_cache:
+                logger.debug(f"    Offering: {season}, Link: {link} (cached)")
+                course_info = course_page_cache[link]
+            else:
+                course_info = get_course_data(link, session, sleep_secs=sleep_secs)
+                course_page_cache[link] = course_info
+                logger.debug(f"    Offering: {season}, Link: {link}")
 
-    return all_records
+            records.append({
+                "major": major_name,
+                "course": course_name,
+                "season": season,
+                "link": link,
+                "course_info": course_info,
+            })
+
+    return records
+
 
 def main():
     parser = argparse.ArgumentParser(description="Scrape the UMB course catalog into SQLite.")
@@ -186,7 +264,14 @@ def main():
                          help="Seconds to sleep between major-page requests (default: 3)")
     parser.add_argument("--sleep-course", type=float, default=2.0,
                          help="Seconds to sleep between course-page requests (default: 2)")
+    parser.add_argument("--log-level", default="INFO",
+                         help="Logging level (default: INFO)")
     args = parser.parse_args()
+
+    logging.basicConfig(
+        level=getattr(logging, args.log_level.upper(), logging.INFO),
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
 
     urls = []
     if args.level in ("ugrd", "both"):
@@ -194,17 +279,29 @@ def main():
     if args.level in ("grd", "both"):
         urls.append(GRADUATE_URL)
 
-    all_course_records = []
-    for url in urls:
-        majors = scrape_all_majors(url)
-        course_offerings = scrape_course_offerings(
-            majors, max_majors=args.max_majors, sleep_secs=args.sleep_offering
-        )
-        all_course_records += scrape_course_sections(
-            course_offerings, max_majors=args.max_majors, sleep_secs=args.sleep_course
-        )
+    session = build_session()
+    conn = init_db(args.db_path)
+    course_page_cache = {}
 
-    save_records_to_sqlite(all_course_records, db_path=args.db_path)
+    try:
+        for url in urls:
+            majors = scrape_all_majors(url, session)
+
+            for count, major in enumerate(majors):
+                if args.max_majors is not None and count >= args.max_majors:
+                    break
+
+                courses = scrape_major_courses(major, session, sleep_secs=args.sleep_offering)
+                records = scrape_course_sections(
+                    major["name"], courses, session,
+                    sleep_secs=args.sleep_course, course_page_cache=course_page_cache
+                )
+
+                save_records_to_sqlite(records, conn=conn)
+                logger.info(f"Saved {len(records)} records for {major['name']}")
+    finally:
+        conn.close()
+
 
 if __name__ == "__main__":
     main()
