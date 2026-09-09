@@ -1,4 +1,6 @@
 myenv/
 ingest/courses.db
 ingest/scraped_majors.txt
-CLAUDE.md
+./CLAUDE.md
+notes.txt
+ingest/scrape.log
