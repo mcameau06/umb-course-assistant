@@ -321,7 +321,7 @@ def main():
         for url in urls:
             majors = scrape_all_majors(url, session)
             majors = [m for m in majors if m["url"] not in completed_majors]
-
+            majors_already_scraped = len(completed_majors)
             for count, major in enumerate(majors):
                 if args.max_majors is not None and count >= args.max_majors:
                     break
@@ -335,6 +335,7 @@ def main():
                 save_records_to_sqlite(records, conn=conn)
                 mark_major_completed(args.progress_file, major["url"])
                 logger.info(f"Saved {len(records)} records for {major['name']}")
+                logger.info(f"Progress: {count + 1 + majors_already_scraped}/{len(majors) + majors_already_scraped} majors scraped for {url}")
     finally:
         conn.close()
 

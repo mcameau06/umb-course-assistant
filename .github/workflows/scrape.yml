@@ -1,0 +1,49 @@
+name: Scrape course catalog
+
+on:
+  schedule:
+    - cron: '*/20 * * * *'
+  workflow_dispatch:
+    inputs:
+      max_majors:
+        description: 'Max majors to scrape this run (blank = no limit)'
+        required: false
+        default: '5'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: scrape-catalog
+  cancel-in-progress: false
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests beautifulsoup4 lxml
+
+      - name: Run scraper
+        run: |
+          python -m ingest.scraper --level ugrd \
+            --max-majors "${{ github.event.inputs.max_majors || '5' }}"
+
+      - name: Commit updated database
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -f ingest/courses.db ingest/scraped_majors.txt
+          git diff --cached --quiet && exit 0
+          git commit -m "Scrape: update course catalog data"
+          git push
+
+      - name: Report progress
+        if: always()
+        run: python -m ingest.report_progress

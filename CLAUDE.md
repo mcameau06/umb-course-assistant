@@ -4,9 +4,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Stage 1 of a larger project: an AI course-advising chatbot for UMB (UMass Boston) students. This repo currently implements the ingest stage — scraping the UMB course catalog (https://courses.umb.edu/course_catalog/) into a local SQLite database.
+Stage 1 of a larger project: an AI course-advising chatbot for UMB (UMass Boston) students, ultimately delivered as a website. Its primary feature is letting a student upload their course audit and get matched to courses that still satisfy their remaining distribution/gen-ed requirements; it also supports general course questions. This repo currently implements the ingest stage — scraping the UMB course catalog (https://courses.umb.edu/course_catalog/) into a local SQLite database.
 
-Planned downstream stages (not yet built): loading catalog data (courses, descriptions, prerequisites) into a vector database, and a chatbot that takes a student's course audit as input, figures out which courses they still need, and answers questions/gives recommendations based on retrieved catalog data.
+Planned downstream stages (not yet built):
+
+2. **Vector DB** — embed course data (Gemini embeddings) and store it in Chroma, run in embedded/persistent mode alongside the backend (no separate service to host).
+3. **Audit parsing** — accept an uploaded course audit and use an LLM (Gemini) to extract completed courses / remaining requirements from it.
+4. **Matching/recommendation logic** — cross-reference the parsed audit against the catalog (vector DB + structured distribution-requirement data) to find courses satisfying remaining requirements, and answer general course questions.
+5. **Backend API** — FastAPI, tying ingest data, the vector DB, audit parsing, and matching logic together into endpoints for the frontend.
+6. **Frontend** — React app for uploading audits and viewing recommendations.
+
+Stages 3 and 4 may end up merged into a single audit-to-recommendations pipeline depending on implementation. Note: the scraped catalog data may not include real distribution-requirement tags yet (the `Course Attributes` field seen so far only carries course-material-cost notes) — this needs verifying across more majors, and a separate UMB data source for distribution requirements may be needed before stage 4 can work.
 
 ## Setup and commands
 
@@ -14,13 +22,12 @@ Planned downstream stages (not yet built): loading catalog data (courses, descri
 python -m venv myenv && source myenv/bin/activate
 pip install -r requirements.txt
 
-# Run the scraper (from ingest/)
-cd ingest
-python scraper.py --level ugrd          # undergrad only (default)
-python scraper.py --level both --max-majors 1   # quick test run
+# Run the scraper (from repo root — ingest/ is a package, run as a module)
+python -m ingest.scraper --level ugrd          # undergrad only (default)
+python -m ingest.scraper --level both --max-majors 1   # quick test run
 ```
 
-Key `scraper.py` flags: `--level {ugrd,grd,both}`, `--max-majors N`, `--db-path`, `--progress-file`, `--sleep-offering`, `--sleep-course`, `--log-level`.
+Key `scraper.py` flags: `--level {ugrd,grd,both}`, `--max-majors N`, `--db-path`, `--progress-file`, `--sleep-offering`, `--sleep-course`, `--log-level`. `--db-path`/`--progress-file` default to `ingest/courses.db`/`ingest/scraped_majors.txt` regardless of cwd.
 
 There is no test suite, linter, or build step configured in this repo yet.
 
@@ -42,4 +49,4 @@ Records flow into `database.py:save_records_to_sqlite`, which upserts across fou
 
 **HTML parsing is brittle by nature**: `scrape_major_courses` and `utils.extract_description`/`extract_sections` depend on specific CSS classes and DOM structure on courses.umb.edu (e.g. `showHideList`, `class-info-rows`, `body-content`). If scraping starts returning empty results, the site's markup has likely changed — check these selectors first.
 
-`database.py` and `utils.py` are imported by bare module name (`from utils import ...`), so `scraper.py` must be run with `ingest/` as the working directory / on the path (as the `cd ingest` in the run command above does).
+`ingest/` is a Python package (`ingest/__init__.py`); `scraper.py` and `database.py` import sibling modules via absolute package paths (`from ingest.utils import ...`), so run everything from the repo root as `python -m ingest.scraper`, and future components (vector DB, chatbot) can do `from ingest.database import ...` the same way.
