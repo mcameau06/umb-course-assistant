@@ -4,3 +4,7 @@ ingest/scraped_majors.txt
 ./CLAUDE.md
 notes.txt
 ingest/scrape.log
+vectordb/.env
+vectordb/chroma_db
+audit.pdf
+chat_demo.py

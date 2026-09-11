@@ -4,6 +4,7 @@ beautifulsoup4==4.15.0
 bs4==0.0.2
 certifi==2026.7.22
 charset-normalizer==3.5.1
+chromadb
 comm==0.2.3
 debugpy==1.8.21
 decorator==5.3.1
@@ -11,6 +12,7 @@ exceptiongroup==1.3.1
 executing==2.2.1
 filelock==3.19.1
 fsspec==2025.10.0
+google-genai
 idna==3.19
 importlib_metadata==8.7.1
 ipykernel==6.31.0
@@ -26,6 +28,7 @@ mpmath==1.3.0
 nest-asyncio==1.6.0
 networkx==3.2.1
 packaging==26.3
+python-dotenv
 parso==0.8.7
 pexpect==4.9.0
 platformdirs==4.4.0
