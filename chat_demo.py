@@ -1,10 +1,4 @@
-"""Sanity-check script: chat with Gemini using tool-calling over SQL + vector search.
 
-This is a prototype for testing the ingest DB / vector DB pipelines end-to-end,
-ahead of the real matching/chat architecture (see CLAUDE.md stages 4-5). It routes
-between deterministic SQL lookups (prerequisites, schedules) and semantic search
-over course descriptions, via Gemini function calling.
-"""
 
 import sqlite3
 from typing import Optional
