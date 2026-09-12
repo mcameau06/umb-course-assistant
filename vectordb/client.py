@@ -15,7 +15,11 @@ load_dotenv(os.path.join(VECTORDB_DIR, ".env"))
 
 def get_collection(chroma_path=None):
     client = chromadb.PersistentClient(path=chroma_path or CHROMA_PATH)
-    return client.get_or_create_collection(COLLECTION_NAME)
+    return client.get_or_create_collection(
+        COLLECTION_NAME,
+        metadata={"hnsw:space": "cosine"},
+    )
+
 
 
 def resolve_api_key(api_key=None):
