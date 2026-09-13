@@ -13,7 +13,7 @@ TOOL_MAP = {
 
 class AdvisingAgent:
     def __init__(self,client=None):
-        self.model = "gemini-3.5-flash"
+        self.model = "gemini-3.8-flash"
         self.client = client or CLIENT
         self.system_prompt = SYSTEM_PROMPT
         self.chat = self._create_new_chat()

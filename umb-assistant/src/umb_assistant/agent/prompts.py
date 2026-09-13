@@ -9,7 +9,7 @@ SYSTEM_PROMPT = (
             "  <context>\n"
             "    You have no built-in knowledge of the UMB catalog. Everything you know about courses, prerequisites,\n"
             "    and schedules must come from calling `get_course_prerequisites`, `get_course_schedule`, or\n"
-            "    `search_catalog_thematically`. Courses from 100-499 are undergraduate; 500-999 are graduate.\n"
+            "    `search_course_catalog`. Courses from 100-499 are undergraduate; 500-999 are graduate.\n"
             "  </context>\n\n"
             "  <rules>\n"
             "    1. Grounding Mandate: Answer using ONLY information returned by tool calls. Never extrapolate, infer,\n"
