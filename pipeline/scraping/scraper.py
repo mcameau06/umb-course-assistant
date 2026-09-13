@@ -5,14 +5,9 @@ from urllib3.util.retry import Retry
 import time
 import argparse
 import logging
-import os
-from ingest.utils import extract_course_info
-from ingest.database import init_db, save_records_to_sqlite
-
-UNDERGRADUATE_URL = "https://courses.umb.edu/course_catalog/listing/ugrd"
-GRADUATE_URL = "https://courses.umb.edu/course_catalog/listing/grd"
-
-INGEST_DIR = os.path.dirname(os.path.abspath(__file__))
+from pipeline.scraping.utils import extract_course_info
+from pipeline.scraping.database import init_db, save_records_to_sqlite
+from pipeline.core import UNDERGRADUATE_URL, GRADUATE_URL,CHECKPOINT_PATH,SQL_DB_PATH
 
 HEADERS = {'User-Agent': 'UMB-CoursePlanner (student course-planning project)'}
 
@@ -289,10 +284,10 @@ def main():
                          help="Which catalog to scrape (default: ugrd)")
     parser.add_argument("--max-majors", type=int, default=None,
                          help="Limit the number of majors scraped per catalog (default: all)")
-    parser.add_argument("--db-path", default=os.path.join(INGEST_DIR, "courses.db"),
+    parser.add_argument("--db-path", default=SQL_DB_PATH,
                          help="Path to the SQLite database file (default: ingest/courses.db)")
-    parser.add_argument("--progress-file", default=os.path.join(INGEST_DIR, "scraped_majors.txt"),
-                         help="Text file tracking completed major URLs, for resuming (default: ingest/scraped_majors.txt)")
+    parser.add_argument("--progress-file", default=CHECKPOINT_PATH,
+                         help="Text file tracking completed major URLs, for resuming (default: ingest/scraping/scraped_majors.txt)")
     parser.add_argument("--sleep-offering", type=float, default=3.0,
                          help="Seconds to sleep between major-page requests (default: 3)")
     parser.add_argument("--sleep-course", type=float, default=2.0,
@@ -313,7 +308,7 @@ def main():
         urls.append(GRADUATE_URL)
 
     session = build_session()
-    conn = init_db(args.db_path)
+    conn = init_db()
     course_page_cache = {}
     completed_majors = load_completed_majors(args.progress_file)
 

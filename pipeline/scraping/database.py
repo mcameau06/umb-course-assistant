@@ -1,6 +1,8 @@
 import sqlite3
 
-from ingest.utils import parse_course_title, extract_prereq_course_codes
+from pipeline.scraping.utils import parse_course_title, extract_prereq_course_codes
+from pipeline.core import SQL_DB_PATH 
+
 
 SCHEMA_SQL = """
     CREATE TABLE IF NOT EXISTS majors (
@@ -49,27 +51,19 @@ SCHEMA_SQL = """
 """
 
 
-def init_db(db_path="courses.db"):
-    """Open a connection and ensure the schema exists.
 
-    Hold onto the returned connection and pass it to save_records_to_sqlite
-    across multiple calls (e.g. once per major) to commit incrementally, so
-    progress isn't lost if a scrape is interrupted.
 
-    Args:
-        db_path: Path to the SQLite database file.
-
-    Returns:
-        An open sqlite3.Connection with the schema created.
+def init_db():
+    """Opens a sqlite3.Connection with the schema created.
     """
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(SQL_DB_PATH)
     conn.execute("PRAGMA foreign_keys = ON")
     conn.executescript(SCHEMA_SQL)
     conn.commit()
     return conn
 
 
-def save_records_to_sqlite(records, conn=None, db_path="courses.db"):
+def save_records_to_sqlite(records, conn=None):
     """Insert a batch of records into the database.
 
     Args:
@@ -83,9 +77,9 @@ def save_records_to_sqlite(records, conn=None, db_path="courses.db"):
     Returns:
         None.
     """
-    close_when_done = conn is None
-    if conn is None:
-        conn = init_db(db_path)
+    owns_conn = conn is None
+    if owns_conn:
+        conn = init_db()
 
     try:
         cur = conn.cursor()
@@ -169,5 +163,5 @@ def save_records_to_sqlite(records, conn=None, db_path="courses.db"):
                                 (course_id, prereq_code, None, prereq_text)
                             )
     finally:
-        if close_when_done:
+        if owns_conn:
             conn.close()

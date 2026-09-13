@@ -1,13 +1,10 @@
-"""Embeds course descriptions with Gemini and upserts them into a persistent Chroma collection."""
-
 import argparse
 import logging
 
-from google import genai
 from google.genai import types
 
-from vectordb.client import CHROMA_PATH, COLLECTION_NAME, EMBEDDING_MODEL, get_collection, resolve_api_key
-from vectordb.database import DEFAULT_DB_PATH, course_level, get_courses_for_embedding
+from pipeline.vectordb.utils import course_level, get_courses_for_embedding
+from pipeline.core import get_chroma_collection, EMBEDDING_MODEL, client as CLIENT, COLLECTION_NAME,SQL_DB_PATH, CHROMA_PATH
 
 BATCH_SIZE = 100
 
@@ -22,7 +19,8 @@ def embed_text(course):
     return f"{course['major']} — {course['title']}\n{course['description']}"
 
 
-def embed_descriptions(texts, client):
+
+def embed_course_info(texts, client):
     response = client.models.embed_content(
         model=EMBEDDING_MODEL,
         contents=texts,
@@ -36,16 +34,16 @@ def embed_all_courses(db_path=None, chroma_path=None, api_key=None, batch_size=B
 
     Returns the number of courses embedded.
     """
-    genai_client = genai.Client(api_key=resolve_api_key(api_key))
-    collection = get_collection(chroma_path)
+    collection = get_chroma_collection()
 
-    courses = get_courses_for_embedding(db_path)
+    courses = get_courses_for_embedding()
     logger.info("Embedding %d courses in batches of %d", len(courses), batch_size)
 
     for i in range(0, len(courses), batch_size):
         batch = courses[i : i + batch_size]
         texts = [embed_text(c) for c in batch]
-        embeddings = embed_descriptions(texts, genai_client)
+        embeddings = embed_course_info(texts, CLIENT)
+
         collection.upsert(
             ids=[course_id(c) for c in batch],
             embeddings=embeddings,
@@ -67,8 +65,8 @@ def embed_all_courses(db_path=None, chroma_path=None, api_key=None, batch_size=B
 
 def main():
     parser = argparse.ArgumentParser(description="Embed course descriptions into Chroma")
-    parser.add_argument("--db-path", default=DEFAULT_DB_PATH,
-                         help=f"Path to the SQLite database file (default: {DEFAULT_DB_PATH})")
+    parser.add_argument("--db-path", default=SQL_DB_PATH,
+                         help=f"Path to the SQLite database file (default: {SQL_DB_PATH})")
     parser.add_argument("--chroma-path", default=CHROMA_PATH,
                          help="Path to the persistent Chroma directory (default: vectordb/chroma_db)")
     parser.add_argument("--batch-size", type=int, default=BATCH_SIZE,

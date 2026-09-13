@@ -2,12 +2,11 @@
 
 from google import genai
 from google.genai import types
+from core.config import client as CLIENT
+from pipeline.vectordb.chroma_client import EMBEDDING_MODEL, get_collection
 
-from vectordb.client import EMBEDDING_MODEL, get_collection, resolve_api_key
-
-
-def embed_query(query_text, client):
-    response = client.models.embed_content(
+def embed_query(query_text) -> list[float]:
+    response = CLIENT.models.embed_content(
         model=EMBEDDING_MODEL,
         contents=query_text,
         config=types.EmbedContentConfig(task_type="RETRIEVAL_QUERY"),
@@ -15,7 +14,8 @@ def embed_query(query_text, client):
     return response.embeddings[0].values
 
 
-def search_courses(query_text, n_results=5, where=None, chroma_path=None, api_key=None):
+
+def search_courses(query_text, n_results=5, where=None, chroma_path=None) -> list[dict]:
     """Semantically search course descriptions.
 
     `where` is an optional Chroma metadata filter, e.g. {"level": "ugrd"} or
@@ -23,8 +23,7 @@ def search_courses(query_text, n_results=5, where=None, chroma_path=None, api_ke
 
     Returns a list of {id, document, metadata, distance} dicts, nearest match first.
     """
-    genai_client = genai.Client(api_key=resolve_api_key(api_key))
-    query_embedding = embed_query(query_text, genai_client)
+    query_embedding = embed_query(query_text)
 
     collection = get_collection(chroma_path)
     results = collection.query(

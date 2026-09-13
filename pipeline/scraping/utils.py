@@ -1,6 +1,5 @@
 import re
 from datetime import datetime
-
 from bs4 import NavigableString, Tag
 
 WANTED_FIELDS = [

@@ -1,28 +1,15 @@
 """Read-only access to ingest/courses.db for the vector-DB embedding pipeline."""
-
-import os
 import re
-import sqlite3
+from pipeline.core import get_connection
 
 NAME_PATTERN = re.compile(r"^(\S+)\s+(\S+)\s+(.+)$")
 
-DEFAULT_DB_PATH = os.path.join(os.path.dirname(__file__), "..", "ingest", "courses.db")
-
-
-def get_connection(db_path=None):
-    """Return a read-only connection to the SQLite database."""
-    path = db_path or DEFAULT_DB_PATH
-    conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-
-def get_courses_for_embedding(db_path=None):
+def get_courses_for_embedding():
     """Return one row per course with a non-empty description, joined to its major.
 
     Each row: {id, major, subject, course_number, title, description}.
     """
-    conn = get_connection(db_path)
+    conn = get_connection()
     try:
         cur = conn.execute(
             """

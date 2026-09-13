@@ -1,9 +1,10 @@
+.env
+data/
+*.txt
+*.log
 myenv/
-ingest/courses.db
-ingest/scraped_majors.txt
+__pycache__/
+.ipynb_checkpoints/
 CLAUDE.md
 notes.txt
-ingest/scrape.log
-vectordb/.env
-vectordb/chroma_db
 audit.pdf
