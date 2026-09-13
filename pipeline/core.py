@@ -15,7 +15,7 @@ GRADUATE_URL = "https://courses.umb.edu/course_catalog/listing/grd"
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 SQL_DB_PATH = os.path.join(ROOT_DIR, "data", "courses.db")
 CHROMA_PATH = os.path.join(ROOT_DIR, "data", "chroma_db")
-CHECKPOINT_PATH = os.path.join(ROOT_DIR, "ingest", "scraping", "scraped_majors.txt")
+CHECKPOINT_PATH = os.path.join(ROOT_DIR, "pipeline", "scraping", "scraped_majors.txt")
 COLLECTION_NAME = "courses"
 EMBEDDING_MODEL = "gemini-embedding-001"
 
