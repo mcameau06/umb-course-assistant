@@ -20,6 +20,7 @@ umb-app/
 │
 ├── umb-assistant/                 # Core AI engine (reads from data/)
 │   └── src/umb_assistant/
+│       ├── __main__.py            # CLI entrypoint
 │       ├── core/                  # Shared Gemini client, config, & connections
 │       ├── services/              # Read-only search & vector retrieval
 │       └── agent/                 # AdvisingAgent, tools, & system prompts
@@ -40,6 +41,30 @@ umb-app/
   * Explicit fallback directives to human academic advisors when information is unavailable.
   * Prompt-injection defense that isolates untrusted student inputs.
 
+
+---
+
+## Example Usage
+
+The `umb_assistant` package ships a CLI entrypoint that runs an interactive chat loop against `AdvisingAgent`. It needs `GEMINI_API_KEY` set (in a `.env` file at the project root, or exported in your shell), and the `data/courses.db` and `data/chroma_db/` produced by the `pipeline/` scripts.
+
+```bash
+cd umb-assistant/src
+python -m umb_assistant
+```
+
+```text
+UMB Course Advising Assistant
+Type your question below (Ctrl+C to quit).
+
+You: What are the prerequisites for CS 310?
+
+Assistant: CS 310 (Data Structures) requires CS 210 (Introduction to Programming with a
+grade of C or better)...
+
+You: ^C
+Goodbye!
+```
 
 ---
 
